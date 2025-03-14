@@ -76,7 +76,7 @@ const App = () => {
     setSongs([]);
     setDetails("");
     try {
-      const res = await axios.post("http://localhost:5000/text-emotion", { text });
+      const res = await axios.post("https://spotify-emoter.onrender.com/text-emotion", { text });
       setEmotion(res.data.emotion);
       setSongs(res.data.songs || []);
       setDetails(res.data.details);
@@ -96,7 +96,7 @@ const App = () => {
     setDetails("");
     const imageSrc = webcamRef.current.getScreenshot();
     try {
-      const res = await axios.post("http://localhost:5000/face-emotion", { image: imageSrc });
+      const res = await axios.post("https://spotify-emoter.onrender.com/face-emotion", { image: imageSrc });
       setEmotion(res.data.emotion);
       setSongs(res.data.songs || []);
       setDetails(res.data.details);

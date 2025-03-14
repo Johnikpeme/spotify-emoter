@@ -1,13 +1,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os
+from transformers import pipeline
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
-import base64
+import os
 import logging
 import random
 
 app = Flask(__name__)
-CORS(app)
+# Specify CORS to allow requests from your Netlify frontend
+CORS(app, resources={
+    r"/text-emotion": {"origins": "https://your-site-name.netlify.app"},
+    r"/face-emotion": {"origins": "https://your-site-name.netlify.app"}
+})
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -22,34 +28,18 @@ if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
 
 # Initialize Spotify client
 try:
-    import spotipy
-    from spotipy.oauth2 import SpotifyClientCredentials
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID,
                                                               client_secret=SPOTIFY_CLIENT_SECRET))
 except Exception as e:
     logging.error(f"Spotify initialization failed: {e}")
     raise
 
-# Load pre-trained models (with fallbacks)
-try:
-    from transformers import pipeline
-    text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion")
-except Exception as e:
-    logging.error(f"Text emotion analyzer failed to load: {e}")
-    text_emotion_analyzer = None
-
-try:
-    from deepface import DeepFace
-    import cv2
-    import numpy as np
-    face_emotion_enabled = True
-except Exception as e:
-    logging.error(f"Face emotion detection setup failed: {e}")
-    face_emotion_enabled = False
+# Load pre-trained model for text emotion with logging
+logging.debug("Attempting to load text emotion analyzer...")
+text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion")
+logging.debug("Text emotion analyzer loaded successfully")
 
 def detect_text_emotion(text):
-    if text_emotion_analyzer is None:
-        return {"emotion": "neutral", "confidence": 0.5, "details": "Text emotion analyzer unavailable"}
     try:
         result = text_emotion_analyzer(text)[0]
         emotion = result["label"]
@@ -58,46 +48,11 @@ def detect_text_emotion(text):
         return {"emotion": emotion, "confidence": confidence, "details": "Analyzed text sentiment"}
     except Exception as e:
         logging.error(f"Text emotion detection error: {e}")
-        return {"emotion": "neutral", "confidence": 0.5, "details": "Error in text analysis"}
+        raise  # Crash the app to diagnose the issue
 
 def detect_face_emotion(image_data):
-    if not face_emotion_enabled:
-        return {"emotion": "neutral", "confidence": 0.5, "details": "Face emotion detection unavailable on this server"}
-    try:
-        img_bytes = base64.b64decode(image_data.split(",")[1])
-        nparray = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(nparray, cv2.IMREAD_COLOR)
-        result = DeepFace.analyze(frame, actions=["emotion"], detector_backend="opencv", enforce_detection=False)[0]
-        emotion = result["dominant_emotion"]
-        emotion_scores = result["emotion"]
-        
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-        
-        details = []
-        if len(faces) > 0:
-            for (x, y, w, h) in faces:
-                roi_gray = gray[y:y+h, x:x+w]
-                eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
-                mouth_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
-                
-                eyes = eye_cascade.detectMultiScale(roi_gray)
-                mouth = mouth_cascade.detectMultiScale(roi_gray, scaleFactor=1.7, minNeighbors=20)
-                
-                details.append("Scanning facial features:")
-                details.append("- Eyes: " + ("detected" if len(eyes) > 0 else "not detected"))
-                details.append("- Mouth: " + ("detected (smile)" if len(mouth) > 0 and emotion == "happy" else "detected" if len(mouth) > 0 else "not detected"))
-
-        logging.debug(f"Detected face emotion: {emotion}, scores: {emotion_scores}")
-        return {
-            "emotion": emotion,
-            "confidence": max(emotion_scores.values()) / 100,
-            "details": " ".join(details) if details else "No facial features detected"
-        }
-    except Exception as e:
-        logging.error(f"Face detection error: {e}")
-        return {"emotion": "neutral", "confidence": 0.5, "details": "Error in face analysis"}
+    # Face detection disabled to reduce memory usage on Render's free tier
+    return {"emotion": "neutral", "confidence": 0.5, "details": "Face emotion detection disabled for deployment"}
 
 def recommend_songs(emotion, num_songs=15):
     emotion_queries = {
@@ -179,6 +134,5 @@ def face_emotion():
     return jsonify(response)
 
 if __name__ == "__main__":
-    # Bind to the port provided by Render via the PORT environment variable
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
