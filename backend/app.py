@@ -1,84 +1,95 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import text2emotion as te
-import nltk
+from deepface import DeepFace
+from transformers import pipeline
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+import cv2
+import numpy as np
 from dotenv import load_dotenv
 import os
+import base64
 import logging
 import random
 
-# Download required NLTK data at startup
-logging.basicConfig(level=logging.DEBUG)
-logging.debug("Downloading NLTK data...")
-try:
-    nltk.download('punkt', quiet=True)
-    nltk.download('wordnet', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    nltk.download('omw-1.4', quiet=True)
-    logging.debug("NLTK data downloaded successfully")
-except Exception as e:
-    logging.error(f"Failed to download NLTK data: {e}")
-    raise
-
 app = Flask(__name__)
-CORS(app, resources={
-    r"/text-emotion": {"origins": "https://your-site-name.netlify.app"},
-    r"/face-emotion": {"origins": "https://your-site-name.netlify.app"}
-})
+CORS(app)
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Load environment variables
 load_dotenv()
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
 if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
-    logging.error("Spotify credentials not found in .env")
     raise ValueError("Spotify credentials not found in .env")
 
+# Initialize Spotify client
 try:
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID,
                                                               client_secret=SPOTIFY_CLIENT_SECRET))
-    logging.debug("Spotify client initialized successfully")
 except Exception as e:
     logging.error(f"Spotify initialization failed: {e}")
     raise
 
-logging.debug("text2emotion is ready for text emotion analysis")
+# Load pre-trained models
+text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion")
 
 def detect_text_emotion(text):
     try:
-        if not isinstance(text, str) or not text.strip():
-            raise ValueError("Invalid text input")
-        
-        emotions = te.get_emotion(text)
-        logging.debug(f"Raw emotions from text2emotion: {emotions}")
-        
-        dominant_emotion = max(emotions, key=emotions.get)
-        confidence = emotions[dominant_emotion]
-        
-        if confidence == 0:
-            logging.warning(f"No emotion detected for text: '{text}', emotions: {emotions}")
-            return {"emotion": "neutral", "confidence": 0.5, "details": "No emotion detected"}
-        
-        logging.debug(f"Text emotion: {dominant_emotion} (confidence: {confidence:.2f})")
-        return {
-            "emotion": dominant_emotion.lower(),
-            "confidence": confidence,
-            "details": f"Analyzed text sentiment with text2emotion: {emotions}"
-        }
+        result = text_emotion_analyzer(text)[0]
+        emotion = result["label"]
+        confidence = result["score"]
+        logging.debug(f"Text emotion: {emotion} (confidence: {confidence:.2f})")
+        return {"emotion": emotion, "confidence": confidence, "details": "Analyzed text sentiment"}
     except Exception as e:
         logging.error(f"Text emotion detection error: {e}")
         return {"emotion": "neutral", "confidence": 0.5, "details": "Error in text analysis"}
 
 def detect_face_emotion(image_data):
-    return {"emotion": "neutral", "confidence": 0.5, "details": "Face emotion detection disabled for deployment"}
+    try:
+        img_bytes = base64.b64decode(image_data.split(",")[1])
+        nparray = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparray, cv2.IMREAD_COLOR)
+        result = DeepFace.analyze(frame, actions=["emotion"], detector_backend="opencv", enforce_detection=False)[0]
+        emotion = result["dominant_emotion"]
+        emotion_scores = result["emotion"]
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        details = []
+        if len(faces) > 0:
+            for (x, y, w, h) in faces:
+                roi_gray = gray[y:y+h, x:x+w]
+                eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
+                mouth_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
+                
+                eyes = eye_cascade.detectMultiScale(roi_gray)
+                mouth = mouth_cascade.detectMultiScale(roi_gray, scaleFactor=1.7, minNeighbors=20)
+                
+                details.append("Scanning facial features:")
+                details.append("- Eyes: " + ("detected" if len(eyes) > 0 else "not detected"))
+                details.append("- Mouth: " + ("detected (smile)" if len(mouth) > 0 and emotion == "happy" else "detected" if len(mouth) > 0 else "not detected"))
+
+        logging.debug(f"Detected face emotion: {emotion}, scores: {emotion_scores}")
+        return {
+            "emotion": emotion,
+            "confidence": max(emotion_scores.values()) / 100,
+            "details": " ".join(details) if details else "No facial features detected"
+        }
+    except Exception as e:
+        logging.error(f"Face detection error: {e}")
+        return {"emotion": "neutral", "confidence": 0.5, "details": "Error in face analysis"}
 
 def recommend_songs(emotion, num_songs=15):
     emotion_queries = {
-        "happy": "happy pop upbeat",
-        "sad": "sad pop melancholy",
-        "angry": "angry rock intense",
+        "joy": "happy pop upbeat",
+        "sadness": "sad pop melancholy",
+        "anger": "angry rock intense",
         "fear": "dark pop eerie",
         "surprise": "upbeat pop energetic",
         "disgust": "grunge punk",
@@ -100,9 +111,6 @@ def recommend_songs(emotion, num_songs=15):
         offset = random.randint(0, 100)
         results = sp.search(q=query, type="track", limit=50, offset=offset)
         tracks = results["tracks"]["items"]
-        if not tracks:
-            logging.warning(f"No tracks found for query: {query}")
-            return [{"name": "No songs found", "artist": "", "url": "", "preview_url": None, "album_image": None, "artist_image": None}]
         
         random.shuffle(tracks)
         song_recommendations = [
@@ -111,71 +119,50 @@ def recommend_songs(emotion, num_songs=15):
                 "artist": track["artists"][0]["name"],
                 "url": track["external_urls"]["spotify"],
                 "preview_url": track["preview_url"],
-                "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
-                "artist_image": track["artists"][0]["images"][0]["url"] if track["artists"][0].get("images") else None
+                "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,  # Album artwork
+                "artist_image": track["artists"][0]["images"][0]["url"] if track["artists"][0].get("images") else None  # Artist image
             }
             for track in tracks[:num_songs]
         ]
         logging.debug(f"Recommended songs: {song_recommendations}")
-        return song_recommendations
+        return song_recommendations if song_recommendations else [{"name": "No songs found", "artist": "", "url": "", "preview_url": None, "album_image": None, "artist_image": None}]
     except Exception as e:
         logging.error(f"Spotify error: {e}")
         return [{"name": f"Error fetching songs: {str(e)}", "artist": "", "url": "", "preview_url": None, "album_image": None, "artist_image": None}]
 
 @app.route("/text-emotion", methods=["POST"])
 def text_emotion():
-    try:
-        data = request.json
-        if not data or "text" not in data:
-            logging.error("No text provided in request")
-            return jsonify({"error": "No text provided"}), 400
-        
-        text = data.get("text", "").strip()
-        if not text:
-            logging.error("Empty text provided in request")
-            return jsonify({"error": "Empty text provided"}), 400
-        
-        emotion_data = detect_text_emotion(text)
-        songs = recommend_songs(emotion_data["emotion"])
-        response = {
-            "emotion": emotion_data["emotion"],
-            "confidence": emotion_data["confidence"],
-            "details": emotion_data["details"],
-            "songs": songs
-        }
-        logging.debug(f"Text emotion response: {response}")
-        return jsonify(response)
-    except Exception as e:
-        logging.error(f"Error in /text-emotion endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
+    data = request.json
+    text = data.get("text", "")
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+    emotion_data = detect_text_emotion(text)
+    songs = recommend_songs(emotion_data["emotion"])
+    response = {
+        "emotion": emotion_data["emotion"],
+        "confidence": emotion_data["confidence"],
+        "details": emotion_data["details"],
+        "songs": songs
+    }
+    logging.debug(f"Text emotion response: {response}")
+    return jsonify(response)
 
 @app.route("/face-emotion", methods=["POST"])
 def face_emotion():
-    try:
-        data = request.json
-        if not data or "image" not in data:
-            logging.error("No image provided in request")
-            return jsonify({"error": "No image provided"}), 400
-        
-        image_data = data.get("image", "").strip()
-        if not image_data:
-            logging.error("Empty image provided in request")
-            return jsonify({"error": "Empty image provided"}), 400
-        
-        emotion_data = detect_face_emotion(image_data)
-        songs = recommend_songs(emotion_data["emotion"])
-        response = {
-            "emotion": emotion_data["emotion"],
-            "confidence": emotion_data["confidence"],
-            "details": emotion_data["details"],
-            "songs": songs
-        }
-        logging.debug(f"Face emotion response: {response}")
-        return jsonify(response)
-    except Exception as e:
-        logging.error(f"Error in /face-emotion endpoint: {e}")
-        return jsonify({"error": str(e)}), 500
+    data = request.json
+    image_data = data.get("image", "")
+    if not image_data:
+        return jsonify({"error": "No image provided"}), 400
+    emotion_data = detect_face_emotion(image_data)
+    songs = recommend_songs(emotion_data["emotion"])
+    response = {
+        "emotion": emotion_data["emotion"],
+        "confidence": emotion_data["confidence"],
+        "details": emotion_data["details"],
+        "songs": songs
+    }
+    logging.debug(f"Face emotion response: {response}")
+    return jsonify(response)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True, port=5000)

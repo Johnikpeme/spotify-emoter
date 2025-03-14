@@ -70,16 +70,13 @@ const App = () => {
   const [darkMode, setDarkMode] = useState(false);
   const webcamRef = useRef(null);
 
-  // Use the Render backend URL
-  const API_BASE_URL = "https://spotify-emoter.onrender.com";
-
   const analyzeText = async () => {
     setLoading(true);
     setEmotion("");
     setSongs([]);
     setDetails("");
     try {
-      const res = await axios.post(`${API_BASE_URL}/text-emotion`, { text });
+      const res = await axios.post("http://localhost:5000/text-emotion", { text });
       setEmotion(res.data.emotion);
       setSongs(res.data.songs || []);
       setDetails(res.data.details);
@@ -87,7 +84,7 @@ const App = () => {
       console.error("Text analysis error:", error.response?.data || error);
       setEmotion("neutral");
       setSongs([]);
-      setDetails("Error occurred while analyzing text");
+      setDetails("Error occurred");
     }
     setLoading(false);
   };
@@ -98,13 +95,8 @@ const App = () => {
     setSongs([]);
     setDetails("");
     const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) {
-      setLoading(false);
-      setDetails("Failed to capture image from webcam");
-      return;
-    }
     try {
-      const res = await axios.post(`${API_BASE_URL}/face-emotion`, { image: imageSrc });
+      const res = await axios.post("http://localhost:5000/face-emotion", { image: imageSrc });
       setEmotion(res.data.emotion);
       setSongs(res.data.songs || []);
       setDetails(res.data.details);
@@ -112,7 +104,7 @@ const App = () => {
       console.error("Face analysis error:", error.response?.data || error);
       setEmotion("neutral");
       setSongs([]);
-      setDetails("Error occurred while analyzing face");
+      setDetails("Error occurred");
     }
     setLoading(false);
     setWebcamActive(false);
@@ -181,14 +173,14 @@ const App = () => {
               transition={{ duration: 0.8, ease: "easeOut" }}
             >
               <Typography
-                variant="h2"
-                align="center"
-                gutterBottom
-                className="main-title"
-                sx={{ fontWeight: 700 }}
-              >
-                Feelin’ Flow
-              </Typography>
+              variant="h2"
+              align="center"
+              gutterBottom
+              className="main-title"
+              sx={{ fontWeight: 700 }} // Inline bold styling
+            >
+              Feelin’ Flow
+            </Typography>
               <Grid container spacing={3} justifyContent="center">
                 <Grid item xs={12} sm={6}>
                   <TextField
