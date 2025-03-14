@@ -1,11 +1,8 @@
-Flask==2.2.2
-werkzeug==2.2.3  # Add compatible Werkzeug version
+flask==2.2.2
+werkzeug==2.2.3  # Required for Flask compatibility
 flask-cors==3.0.10
 transformers==4.25.1
-torch==1.13.1
-opencv-python-headless==4.7.0.72
-deepface==0.0.79
+torch==1.13.1  # Compatible with transformers 4.25.1
 spotipy==2.22.1
-requests==2.31.0
-numpy==1.24.2
+requests==2.31.0  # Explicitly required by spotipy
 python-dotenv==1.0.0

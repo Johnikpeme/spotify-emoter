@@ -34,9 +34,9 @@ except Exception as e:
     logging.error(f"Spotify initialization failed: {e}")
     raise
 
-# Load pre-trained model for text emotion with logging
-logging.debug("Attempting to load text emotion analyzer...")
-text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion")
+# Load pre-trained model for text emotion with PyTorch explicitly
+logging.debug("Attempting to load text emotion analyzer with PyTorch...")
+text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion", framework="pt")
 logging.debug("Text emotion analyzer loaded successfully")
 
 def detect_text_emotion(text):
