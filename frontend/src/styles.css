@@ -1,0 +1,226 @@
+/* Import Sora font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap');
+
+/* Apply Sora font globally */
+body, html, * {
+  font-family: 'Sora', sans-serif !important;
+}
+
+.app-wrapper {
+  display: flex;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.light {
+  background: #f9f9f9;
+  color: #333;
+}
+
+.dark {
+  background: #121212;
+  color: #fff; /* Base text color in dark mode */
+}
+
+.sidebar {
+  width: 250px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  position: fixed;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sidebar-content {
+  text-align: center;
+}
+
+.sidebar-logo {
+  width: 120px;
+  margin-bottom: 20px;
+}
+
+.sidebar-title {
+  font-weight: 700;
+  color: #1db954;
+  margin-bottom: 30px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+}
+
+.nav-item {
+  font-size: 14px;
+  color: #b3b3b3;
+  cursor: pointer;
+  transition: color 0.3s;
+  padding: 8px 16px;
+}
+
+.nav-item.active {
+  color: #1db954;
+  font-weight: 600;
+  background: rgba(29, 185, 84, 0.1);
+  border-radius: 8px;
+}
+
+.nav-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.main-content {
+  flex-grow: 1;
+  margin-left: 250px;
+  padding: 20px;
+}
+
+.main-title {
+  font-weight: 700;
+  color: #1db954;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.input-field {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+}
+
+.input-field label {
+  color: #333; /* Default black in light mode */
+}
+
+.dark .input-field label {
+  color: #fff; /* White in dark mode */
+}
+
+.action-button {
+  border-radius: 25px;
+  padding: 10px 20px;
+  font-weight: 600;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.action-button:hover {
+  transform: scale(1.05);
+  background: #1ed760;
+}
+
+.webcam {
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40px;
+  color: inherit; /* Inherits dark/light mode color */
+}
+
+.emotion-card {
+  margin-top: 40px;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.emotion-image {
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.emotion-card:hover .emotion-image {
+  transform: scale(1.1);
+}
+
+.emotion-title {
+  font-weight: 700;
+  color: #1db954;
+  text-transform: uppercase;
+}
+
+.emotion-details,
+.emotion-stats {
+  color: #b3b3b3; /* Light gray for contrast in both modes */
+}
+
+.song-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.dark .song-card {
+  background: rgba(30, 30, 30, 0.9);
+}
+
+.song-image {
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.song-card:hover .song-image {
+  transform: scale(1.1);
+}
+
+.song-title a {
+  color: #1db954;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.song-title a:hover {
+  text-decoration: underline;
+}
+
+.artist-image {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #1db954;
+  margin-top: 10px;
+}
+
+Typography[color="text.secondary"] {
+  color: #333; /* Default black in light mode */
+}
+
+.dark Typography[color="text.secondary"] {
+  color: #fff; /* White in dark mode */
+}
+
+.song-date {
+  color: #b3b3b3;
+  display: block;
+  margin-top: 5px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    padding: 10px;
+  }
+  .main-content {
+    margin-left: 0;
+  }
+  .main-title {
+    font-size: 1.5rem;
+  }
+}
