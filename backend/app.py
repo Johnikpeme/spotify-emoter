@@ -1,13 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from deepface import DeepFace
-from transformers import pipeline
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
-import cv2
-import numpy as np
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 import base64
 import logging
 import random
@@ -28,16 +22,34 @@ if not SPOTIFY_CLIENT_ID or not SPOTIFY_CLIENT_SECRET:
 
 # Initialize Spotify client
 try:
+    import spotipy
+    from spotipy.oauth2 import SpotifyClientCredentials
     sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID,
                                                               client_secret=SPOTIFY_CLIENT_SECRET))
 except Exception as e:
     logging.error(f"Spotify initialization failed: {e}")
     raise
 
-# Load pre-trained models
-text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion")
+# Load pre-trained models (with fallbacks)
+try:
+    from transformers import pipeline
+    text_emotion_analyzer = pipeline("text-classification", model="bhadresh-savani/distilbert-base-uncased-emotion")
+except Exception as e:
+    logging.error(f"Text emotion analyzer failed to load: {e}")
+    text_emotion_analyzer = None
+
+try:
+    from deepface import DeepFace
+    import cv2
+    import numpy as np
+    face_emotion_enabled = True
+except Exception as e:
+    logging.error(f"Face emotion detection setup failed: {e}")
+    face_emotion_enabled = False
 
 def detect_text_emotion(text):
+    if text_emotion_analyzer is None:
+        return {"emotion": "neutral", "confidence": 0.5, "details": "Text emotion analyzer unavailable"}
     try:
         result = text_emotion_analyzer(text)[0]
         emotion = result["label"]
@@ -49,6 +61,8 @@ def detect_text_emotion(text):
         return {"emotion": "neutral", "confidence": 0.5, "details": "Error in text analysis"}
 
 def detect_face_emotion(image_data):
+    if not face_emotion_enabled:
+        return {"emotion": "neutral", "confidence": 0.5, "details": "Face emotion detection unavailable on this server"}
     try:
         img_bytes = base64.b64decode(image_data.split(",")[1])
         nparray = np.frombuffer(img_bytes, np.uint8)
@@ -119,8 +133,8 @@ def recommend_songs(emotion, num_songs=15):
                 "artist": track["artists"][0]["name"],
                 "url": track["external_urls"]["spotify"],
                 "preview_url": track["preview_url"],
-                "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,  # Album artwork
-                "artist_image": track["artists"][0]["images"][0]["url"] if track["artists"][0].get("images") else None  # Artist image
+                "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
+                "artist_image": track["artists"][0]["images"][0]["url"] if track["artists"][0].get("images") else None
             }
             for track in tracks[:num_songs]
         ]
@@ -165,4 +179,6 @@ def face_emotion():
     return jsonify(response)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    # Bind to the port provided by Render via the PORT environment variable
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
